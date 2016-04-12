@@ -1,0 +1,82 @@
+---
+title: "Practical Machine Learning Project"
+output: html_document
+---
+
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants will be used. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+### Data Preprocessing
+
+First, we'll load the data sets ignoring the first column "X" and marking the missing data.
+```{r, warning=FALSE, message=FALSE}
+library(caret)
+training <- read.csv("~/Downloads/pml-training.csv", na.strings=c("#DIV/0!","","NA"))[,-1]
+testing<- read.csv("~/Downloads/pml-testing.csv", na.strings=c("#DIV/0!","","NA"))[,-1]
+```
+
+Notice that a lot of columns in the data sets contains nothing but NA.  We'll remove all these columns from the analysis.
+```{r, warning=FALSE, message=FALSE}
+training <- training[,colSums(is.na(training)) == 0]
+testing <- testing[,colSums(is.na(testing)) == 0]
+# training <- training[,colSums(is.na(training)) < 0.25*nrow(training)]
+# testing <- testing[,colSums(is.na(testing)) < 0.25*nrow(testing)]
+```
+
+And remove variables with near zero variance.
+```{r, warning=FALSE, message=FALSE}
+nearzero <- nearZeroVar(training, saveMetrics= TRUE)
+training <- training[,!nearzero$nzv]
+testing <- testing[,!nearzero$nzv]
+```
+
+Also, by examining the remaining columns, we see that the first few columns "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window num_window" can't be used as predictors so they will be removed as well.
+```{r, warning=FALSE, message=FALSE}
+training <- subset(training, select=-c(1:6))
+testing <- subset(testing, select=-c(1:6))
+```
+
+### Data Partitioning
+We will use 75% of the data as "subtrain" to build our predictive models, and the remaining 25% as "subtest" for cross validation.
+```{r, warning=FALSE, message=FALSE}
+set.seed(2016)
+inTrain <- createDataPartition(training$classe,p=0.75,list=FALSE)
+subtrain <- training[inTrain,]
+subtest <- training[-inTrain,]
+```
+
+### Models Training
+In the context of this report, we will use 2 algorithms Classification Tree and Randowm Forest then compare the performance of these algorithms and choose the better one.
+
+#### Classification Tree
+```{r, warning=FALSE, message=FALSE}
+library(rpart)
+#tree.Fit <- train(classe~., method="rpart", data=subtrain)
+tree.Fit <- rpart(classe~., data=subtrain, method="class")
+#plot(tree.Fit$finalModel,uniform=TRUE)
+#text(tree.Fit$finalModel,use.n=TRUE,all=TRUE,cex=.8)
+predict.tree <- predict(tree.Fit, subtest,type="class")
+confusionMatrix(predict.tree,subtest$classe)
+```
+
+#### Random Forest
+```{r, warning=FALSE, message=FALSE}
+
+# rf.Fit <- train(classe ~ . , data=subtrain, method="rf", prox=TRUE)
+# predict.rf <- predict(rf.Fit, subtest)
+# confusionMatrix(predict.rf, subtest$classe)
+
+library(randomForest)
+rf.Fit <- randomForest(classe ~. , data=subtrain, method="class")
+predict.rf <- predict(rf.Fit, subtest, type="class")
+confusionMatrix(predict.rf, subtest$classe)
+```
+
+### Conclusion
+The accuracy for Random Forest algorithm is 99.7% while Classification Tree only yields ~69%.Based on the result, the random forest algorithm is chosen as it has much better performance.
+
+### Prediction Quiz Answers
+```{r, warning=FALSE, message=FALSE}
+predict(rf.Fit, testing)
+```
